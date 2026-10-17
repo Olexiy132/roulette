@@ -6,10 +6,10 @@
 <style>
   /* Прозорий фон для OBS */
   html,body{margin:0;background:transparent;overflow:hidden;font-family:"Segoe UI",Arial,sans-serif}
-  #stage{position:fixed;left:50%;top:50%;width:1100px;transform:translate(-50%,-50%) scale(var(--s,1));opacity:0;transition:opacity .4s}
+  #stage{position:fixed;left:50%;top:50%;width:1100px;transform:translate(-50%,-50%) scale(var(--s,1));opacity:0;transition:opacity .9s ease}
   #stage.on{opacity:1}
   #who{color:#fff;font-size:26px;font-weight:700;text-align:center;margin-bottom:10px;text-shadow:0 2px 6px #000}
-  #win{position:relative;height:190px;overflow:hidden;border:3px solid #2b2f3a;border-radius:10px;background:#12141b}
+  #win{transition:opacity .35s;position:relative;height:190px;overflow:hidden;border:3px solid #2b2f3a;border-radius:10px;background:#12141b}
   #win::before,#win::after{content:"";position:absolute;top:0;bottom:0;width:140px;z-index:2;pointer-events:none}
   #win::before{left:0;background:linear-gradient(90deg,#12141b,transparent)}
   #win::after{right:0;background:linear-gradient(270deg,#12141b,transparent)}
@@ -64,30 +64,53 @@ const sleep = ms => new Promise(r=>setTimeout(r,ms));
 function fit(){ $('stage').style.setProperty('--s', Math.min(1, innerWidth/1140)); }
 addEventListener('resize', fit); fit();
 
-async function run({id, name='Хтось', amount=0}){
-  busy = true;
-  const N = 80, items = Array.from({length:N}, pick);
+function build(){
+  const items = Array.from({length:80}, pick);
   strip.style.transition='none'; strip.style.transform='translateX(0)';
   strip.innerHTML = items.map(p=>`<div class="it" style="--c:${p.c}">${p.name}</div>`).join('');
-  $('who').textContent = `${name} крутить рулетку`; $('res').textContent='';
-  stage.classList.add('on'); await sleep(600);
-
-  // Справжній випадковий оберт: стрічка зупиняється у випадковій точці,
-  // виграє те, що опинилось під стрілкою.
+  $('res').textContent=''; win.style.opacity=1;
+  return items;
+}
+// Крутить стрічку і повертає приз тільки коли вона ПОВНІСТЮ зупинилась
+async function go(items){
+  await sleep(700);
   const iw = 170, stopIdx = 55 + Math.floor(Math.random()*15);
-  const target = stopIdx*iw + Math.random()*(iw-16) + 8;         // точка під стрілкою
+  const target = stopIdx*iw + Math.random()*(iw-16) + 8;   // точка під стрілкою
   const shift  = target - win.clientWidth/2;
+  const stopped = new Promise(res => {
+    let fin=false;
+    const done = () => { if(!fin){ fin=true; strip.removeEventListener('transitionend', h); res(); } };
+    const h = e => { if(e.target===strip && e.propertyName==='transform') done(); };
+    strip.addEventListener('transitionend', h);
+    setTimeout(done, SPIN_MS + 2000);                       // запасний варіант
+  });
   strip.getBoundingClientRect();
-  strip.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.08,.6,0,1)`;
+  strip.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.12,.6,.1,1)`;
   strip.style.transform  = `translateX(${-shift}px)`;
-  await sleep(SPIN_MS + 300);
-
+  await stopped;
+  await sleep(700);                                          // пауза: бачимо, що точно зупинилось
   const prize = items[stopIdx];
   strip.children[stopIdx].classList.add('w');
   $('res').textContent = prize.name;
-  send({type:'result', id, prize:prize.name, donor:name, amount});
-  await sleep(6000);
-  stage.classList.remove('on'); await sleep(500);
+  return prize;
+}
+async function run({id, name='Хтось', amount=0, count=1}){
+  busy = true;
+  count = Math.max(1, Math.min(5, Number(count)||1));
+  const prizes = [];
+  for(let i=0;i<count;i++){
+    $('who').textContent = count>1 ? `${name} крутить рулетку (${i+1}/${count})` : `${name} крутить рулетку`;
+    if(i>0){ win.style.opacity=0; await sleep(400); }
+    const items = build();
+    if(i===0){ stage.classList.add('on'); await sleep(1000); }   // плавна поява
+    else await sleep(400);
+    prizes.push((await go(items)).name);
+    if(i<count-1) await sleep(2500);                              // показуємо виграш перед наступним
+  }
+  // Один результат на всі спіни, і тільки після зупинки останнього
+  send({type:'result', id, prizes, donor:name, amount, count});
+  await sleep(5000);
+  stage.classList.remove('on'); await sleep(1000);
   busy = false; next();
 }
 function next(){ if(!busy && queue.length) run(queue.shift()); }
@@ -102,7 +125,7 @@ function connect(){
   ws.onopen = () => status('підключено до приймача');
   ws.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch{ return; }
-    if(m && m.widget==='roulette') enqueue({id:m.id, name:m.name, amount:m.amount});
+    if(m && m.widget==='roulette') enqueue({id:m.id, name:m.name, amount:m.amount, count:m.count});
   };
   ws.onclose = () => { status('немає зв\u2019язку, пробую знову…'); setTimeout(connect, 3000); };
 }
@@ -110,7 +133,7 @@ connect();
 
 /* ===== Тест ===== */
 if (P.has('test')) document.body.classList.add('t');
-const t = () => enqueue({id:'local-'+Date.now(), name:'Тестер', amount:25});
+const t = () => enqueue({id:'local-'+Date.now(), name:'Тестер', amount:25, count:Number(P.get('count'))||1});
 $('test').onclick = t;
 addEventListener('keydown', e => { if(e.key==='t'||e.key==='T') t(); });
 </script>
