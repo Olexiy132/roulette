@@ -55,9 +55,9 @@ const PRIZES = [
   {name:'25 віджимань',                w:25, c:'#00f0ff'},
   {name:'Плюс 30хв стріму',             w:15, c:'#9d4dff'},
   {name:'Нічо не виграв',             w:12, c:'#9d4dff'},
-  {name:'Виконую бажання',            w:8,  c:'#ff2bd6'},
+  {name:'Виконую бажання',            w:3,  c:'#ff2bd6'},
   {name:'Доначу вам 50 гривень',       w:6,  c:'#ff2bd6'},
-  {name:'Присідаю 50 разів',          w:3, c:'#fff200'},
+  {name:'Присідаю 50 разів',          w:8, c:'#fff200'},
   {name:'Ще один прокрут',          w:6,  c:'#ff2bd6', extra:true},   // бонус: крутиться ще раз
   {name:'Танцюю під ваш трек',         w:1,  c:'#fff200'}
 ];
@@ -65,7 +65,7 @@ const PRIZES = [
 
 /* ===== ЗВУК (весь синтезується в коді: жодних записів і чужих файлів) =====
    Гучність: у посиланні ?vol=0.5 (від 0 до 1). ?vol=0 вимикає звук. */
-const VOL = P.has('vol') ? Math.max(0, Math.min(1, Number(P.get('vol'))||0)) : 0.6;
+const VOL = P.has('vol') ? Math.max(0, Math.min(1, Number(P.get('vol'))||0)) : 0.4;
 let actx = null, master = null, rev = null, noiseBuf = null;
 function setup(c){
   master = c.createGain(); master.gain.value = VOL; master.connect(c.destination);
